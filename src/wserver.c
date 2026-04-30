@@ -4,8 +4,15 @@
 #include <bits/pthreadtypes.h>
 #include <pthread.h>
 #include <stdio.h>
+#include <string.h>
 #include <time.h>
+
 #define MAX_BUF_TASKS 1024
+#define TRUE 1
+#define FALSE 0
+
+char default_root[] = ".";
+char default_schedalg[] = "FIFO";
 
 typedef struct {
   int buf_tasks;                 // set default buffer size
@@ -20,8 +27,6 @@ typedef struct {
 
 // need an task_queue_t(sync)
 task_queue_t q;
-
-char default_root[] = ".";
 
 void task_queue_init(task_queue_t *q) {
   q->buf_tasks = 1;                      // set default buffer size
@@ -70,6 +75,8 @@ int task_queue_pop(task_queue_t *q) {
   return conn_fd;
 }
 
+int is_smallest(task_queue_t *q, int conn_fd) { return TRUE; }
+
 /*define the work thread*/
 void *worker_thread(void *arg) {
   while (1) {
@@ -91,10 +98,11 @@ void *worker_thread(void *arg) {
 int main(int argc, char *argv[]) {
   int c;
   char *root_dir = default_root;
+  char *schedalg = default_schedalg;
   int port = 10000;
   int thread_num = 1; // set default thread num to 1
 
-  while ((c = getopt(argc, argv, "d:p:t:b:")) != -1)
+  while ((c = getopt(argc, argv, "d:p:t:b:s:")) != -1)
     switch (c) {
     case 'd':
       root_dir = optarg;
@@ -107,6 +115,9 @@ int main(int argc, char *argv[]) {
       break;
     case 'b':
       q.buf_tasks = atoi(optarg);
+      break;
+    case 's':
+      schedalg = optarg;
       break;
     default:
       fprintf(stderr, "usage: prompt> ./wserver [-d basedir] [-p port] [-t "
@@ -132,6 +143,10 @@ int main(int argc, char *argv[]) {
     int conn_fd = accept_or_die(listen_fd, (sockaddr_t *)&client_addr,
                                 (socklen_t *)&client_len);
 
+    /*如果调度策略是SFF并且当前conn_fd就是最小的那一个就立即执行*/
+    if (strcmp(schedalg, "SFF") == 0 && is_smallest(&q, conn_fd)) {
+      ;
+    }
     task_queue_push(&q, conn_fd); // add conn_fd to buf_tasks(queue)
     /*Should not handle the data in master thread*/
     //    request_handle(conn_fd);
