@@ -1,4 +1,5 @@
 #include "request.h"
+
 #include "io_helper.h"
 
 //
@@ -8,8 +9,7 @@
 
 #define MAXBUF (8192)
 
-void request_error(int fd, char *cause, char *errnum, char *shortmsg,
-                   char *longmsg) {
+void request_error(int fd, char* cause, char* errnum, char* shortmsg, char* longmsg) {
   char buf[MAXBUF], body[MAXBUF];
 
   // Create the body of error message first (have to know its length for header)
@@ -57,8 +57,8 @@ void request_read_headers(int fd) {
 // Return 1 if static, 0 if dynamic content
 // Calculates filename (and cgiargs, for dynamic) from uri
 //
-int request_parse_uri(char *uri, char *filename, char *cgiargs) {
-  char *ptr;
+int request_parse_uri(char* uri, char* filename, char* cgiargs) {
+  char* ptr;
 
   if (!strstr(uri, "cgi")) {
     // static
@@ -85,7 +85,7 @@ int request_parse_uri(char *uri, char *filename, char *cgiargs) {
 //
 // Fills in the filetype given the filename
 //
-void request_get_filetype(char *filename, char *filetype) {
+void request_get_filetype(char* filename, char* filetype) {
   if (strstr(filename, ".html"))
     strcpy(filetype, "text/html");
   else if (strstr(filename, ".gif"))
@@ -96,7 +96,7 @@ void request_get_filetype(char *filename, char *filetype) {
     strcpy(filetype, "text/plain");
 }
 
-void request_serve_dynamic(int fd, char *filename, char *cgiargs) {
+void request_serve_dynamic(int fd, char* filename, char* cgiargs) {
   char buf[MAXBUF], *argv[] = {NULL};
 
   // The server does only a little bit of the header.
@@ -109,16 +109,16 @@ void request_serve_dynamic(int fd, char *filename, char *cgiargs) {
 
   if (fork_or_die() == 0) {                    // child
     setenv_or_die("QUERY_STRING", cgiargs, 1); // args to cgi go here
-    dup2_or_die(fd, STDOUT_FILENO); // make cgi writes go to socket (not screen)
-    extern char **environ;          // defined by libc
+    dup2_or_die(fd, STDOUT_FILENO);            // make cgi writes go to socket (not screen)
+    extern char** environ;                     // defined by libc
     execve_or_die(filename, argv, environ);
   } else {
     wait_or_die(NULL);
   }
 }
 
-void request_serve_static(int fd, char *filename, int filesize) {
-  int srcfd;
+void request_serve_static(int fd, char* filename, int filesize) {
+  int   srcfd;
   char *srcp, filetype[MAXBUF], buf[MAXBUF];
 
   request_get_filetype(filename, filetype);
@@ -147,40 +147,36 @@ void request_serve_static(int fd, char *filename, int filesize) {
 
 // handle a request
 void request_handle(int fd) {
-  int is_static;
+  int         is_static;
   struct stat sbuf;
-  char buf[MAXBUF], method[MAXBUF], uri[MAXBUF], version[MAXBUF];
-  char filename[MAXBUF], cgiargs[MAXBUF];
+  char        buf[MAXBUF], method[MAXBUF], uri[MAXBUF], version[MAXBUF];
+  char        filename[MAXBUF], cgiargs[MAXBUF];
 
   readline_or_die(fd, buf, MAXBUF);
   sscanf(buf, "%s %s %s", method, uri, version);
   printf("method:%s uri:%s version:%s\n", method, uri, version);
 
   if (strcasecmp(method, "GET")) {
-    request_error(fd, method, "501", "Not Implemented",
-                  "server does not implement this method");
+    request_error(fd, method, "501", "Not Implemented", "server does not implement this method");
     return;
   }
   request_read_headers(fd);
 
   is_static = request_parse_uri(uri, filename, cgiargs);
   if (stat(filename, &sbuf) < 0) {
-    request_error(fd, filename, "404", "Not found",
-                  "server could not find this file");
+    request_error(fd, filename, "404", "Not found", "server could not find this file");
     return;
   }
 
   if (is_static) {
     if (!(S_ISREG(sbuf.st_mode)) || !(S_IRUSR & sbuf.st_mode)) {
-      request_error(fd, filename, "403", "Forbidden",
-                    "server could not read this file");
+      request_error(fd, filename, "403", "Forbidden", "server could not read this file");
       return;
     }
     request_serve_static(fd, filename, sbuf.st_size);
   } else {
     if (!(S_ISREG(sbuf.st_mode)) || !(S_IXUSR & sbuf.st_mode)) {
-      request_error(fd, filename, "403", "Forbidden",
-                    "server could not run this CGI program");
+      request_error(fd, filename, "403", "Forbidden", "server could not run this CGI program");
       return;
     }
     request_serve_dynamic(fd, filename, cgiargs);

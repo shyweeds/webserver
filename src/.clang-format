@@ -1,0 +1,47 @@
+# Base style (do not start from scratch)
+BasedOnStyle: LLVM
+
+# === Indentation ===
+IndentWidth: 2        # Number of spaces per indent level
+TabWidth: 2           # Tab width (if tabs are used)
+
+# === Line width ===
+ColumnLimit: 100      # Maximum line length
+
+# === Brace style (K&R / LLVM style) ===
+BreakBeforeBraces: Attach
+
+# Control single-line statements
+AllowShortIfStatementsOnASingleLine: false   # Avoid one-line if statements
+AllowShortFunctionsOnASingleLine: Empty      # Allow only empty functions on one line
+
+# === Spacing rules ===
+SpaceBeforeParens: ControlStatements   # Space before if/for/while parentheses
+SpacesInParentheses: false             # No spaces inside ()
+SpacesInContainerLiterals: false       # No spaces in {} or []
+
+# === Pointer alignment ===
+PointerAlignment: Left    # int* p; instead of int *p;
+
+# === Include handling ===
+SortIncludes: true        # Automatically sort #include
+IncludeBlocks: Regroup    # Group includes logically
+
+# === Line breaking ===
+AlwaysBreakTemplateDeclarations: Yes   # Break template declarations
+BreakBeforeBinaryOperators: NonAssignment  # Break before operators (except =)
+
+# === Alignment ===
+AlignConsecutiveAssignments: true   # Align variable assignments
+AlignConsecutiveDeclarations: true # Align declarations
+
+# === Empty lines ===
+MaxEmptyLinesToKeep: 1              # Limit consecutive empty lines
+KeepEmptyLinesAtTheStartOfBlocks: false
+
+# === Namespace indentation ===
+NamespaceIndentation: All           # Indent inside namespace
+
+# === C++ standard ===
+Standard: Latest                   # Use latest supported C++ standard
+Cpp11BracedListStyle: true         # Use C++11 braced initialization style

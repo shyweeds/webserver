@@ -26,7 +26,7 @@
 //
 // Send an HTTP request for the specified file
 //
-void client_send(int fd, char *filename) {
+void client_send(int fd, char* filename) {
   char buf[MAXBUF];
   char hostname[MAXBUF];
 
@@ -43,7 +43,7 @@ void client_send(int fd, char *filename) {
 //
 void client_print(int fd) {
   char buf[MAXBUF];
-  int n;
+  int  n;
 
   // Read and display the HTTP Header
   n = readline_or_die(fd, buf, MAXBUF);
@@ -66,18 +66,18 @@ void client_print(int fd) {
   }
 }
 
-int main(int argc, char *argv[]) {
+int main(int argc, char* argv[]) {
   char *host, *filename;
-  int port;
-  int clientfd;
+  int   port;
+  int   clientfd;
 
   if (argc != 4) {
     fprintf(stderr, "Usage: %s <host> <port> <filename>\n", argv[0]);
     exit(1);
   }
 
-  host = argv[1];
-  port = atoi(argv[2]);
+  host     = argv[1];
+  port     = atoi(argv[2]);
   filename = argv[3];
 
   /* Open a single connection to the specified host and port */
