@@ -13,9 +13,9 @@
 #define TRUE 1
 #define FALSE 0
 #define NONE_FD -1
-#define NONE_FILESIZE -1
-#define NONE_SMALLEST_IDX -1
-#define NONE_CONN_FD -1
+#define NONE_FILESIZE -2
+#define NONE_SMALLEST_IDX -3
+#define NONE_CONN_FD -4
 char default_root[]     = ".";
 char default_schedalg[] = "FIFO";
 
