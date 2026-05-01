@@ -1,5 +1,6 @@
 #include "io_helper.h"
 #include "request.h"
+
 #include <assert.h>
 #include <bits/pthreadtypes.h>
 #include <pthread.h>
@@ -8,65 +9,115 @@
 #include <time.h>
 
 #define MAX_BUF_TASKS 1024
+#define MAXBUF (8192)
 #define TRUE 1
 #define FALSE 0
-
-char default_root[] = ".";
+#define NONE_FD -1
+#define NONE_FILESIZE -1
+#define NONE_SMALLEST_IDX -1
+#define NONE_CONN_FD -1
+char default_root[]     = ".";
 char default_schedalg[] = "FIFO";
 
 typedef struct {
-  int buf_tasks;                 // set default buffer size
-  int task_queue[MAX_BUF_TASKS]; // task queue
-  int q_head;                    // head pointer of task queue
-  int q_tail;                    // tail pointer of task queue
-  int q_count;                   // count number of task queue
-  pthread_mutex_t q_mutex;       // task queue mutex init
-  pthread_cond_t q_empty;        // task queue cond init
-  pthread_cond_t q_full;         // task queue cond init
+  int             buf_tasks;                 // set default buffer size
+  int             task_queue[MAX_BUF_TASKS]; // task queue
+  int             q_head;                    // head pointer of task queue
+  int             q_tail;                    // tail pointer of task queue
+  int             q_count;                   // count number of task queue
+  int             filesize;                  // (SFF)indicate requested filesize(if exist)
+  int             is_SFF;                    // whether is_SFF
+  pthread_mutex_t q_mutex;                   // task queue mutex init
+  pthread_cond_t  q_empty;                   // task queue cond init
+  pthread_cond_t  q_full;                    // task queue cond init
 } task_queue_t;
 
 // need an task_queue_t(sync)
 task_queue_t q;
 
-void task_queue_init(task_queue_t *q) {
+void task_queue_init(task_queue_t* q, int is_SFF) {
   q->buf_tasks = 1;                      // set default buffer size
-  q->q_head = 0;                         // head pointer of task queue
-  q->q_tail = 0;                         // tail pointer of task queue
-  q->q_count = 0;                        // count number of task queue
+  q->q_head    = 0;                      // head pointer of task queue
+  q->q_tail    = 0;                      // tail pointer of task queue
+  q->q_count   = 0;                      // count number of task queue
+  q->filesize  = NONE_FILESIZE;          // 初始化没有smallest filesize for SFF
+  q->is_SFF    = is_SFF;                 //(schedalg)is_SFF
   pthread_mutex_init(&q->q_mutex, NULL); // task queue mutex init
   pthread_cond_init(&q->q_full, NULL);   // task queue cond init
   pthread_cond_init(&q->q_empty, NULL);  // task queue cond init
 }
 
+int request_get_filesize(int fd) {
+  int         is_static;
+  struct stat sbuf;
+  char        buf[MAXBUF], method[MAXBUF], uri[MAXBUF], version[MAXBUF];
+  char        filename[MAXBUF], cgiargs[MAXBUF];
+
+  readline_or_die(fd, buf, MAXBUF);
+  sscanf(buf, "%s %s %s", method, uri, version);
+  printf("method:%s uri:%s version:%s\n", method, uri, version);
+
+  if (strcasecmp(method, "GET")) {
+    request_error(fd, method, "501", "Not Implemented", "server does not implement this method");
+    return NONE_FILESIZE;
+  }
+  request_read_headers(fd);
+
+  is_static = request_parse_uri(uri, filename, cgiargs);
+  if (stat(filename, &sbuf) < 0) {
+    request_error(fd, filename, "404", "Not found", "server could not find this file");
+    return NONE_FILESIZE;
+  }
+
+  return sbuf.st_size;
+}
+
 /*push the ready conn_fd to buffer which will be handled by worker threads in
  * threads pool latter*/
-void task_queue_push(task_queue_t *q, int conn_fd) {
+int queue_is_full(task_queue_t* q) {
+  return q->q_count == q->buf_tasks;
+}
+
+int queue_is_empty(task_queue_t* q) {
+  return q->q_count == 0;
+}
+
+void queue_wait_not_full(task_queue_t* q) {
+  while (queue_is_full(q)) {
+    pthread_cond_wait(&q->q_empty, &q->q_mutex);
+  }
+}
+
+void queue_wait_not_empty(task_queue_t* q) {
+  while (queue_is_empty(q)) {
+    pthread_cond_wait(&q->q_full, &q->q_mutex);
+  }
+}
+
+void task_queue_push(task_queue_t* q, int conn_fd) {
   pthread_mutex_lock(&q->q_mutex);
 
   /*when the buffer is full, just wait*/
-  while (q->q_count == q->buf_tasks) {
-    pthread_cond_wait(&q->q_empty, &q->q_mutex);
-  }
+  queue_wait_not_full(q);
 
   q->task_queue[q->q_tail] = conn_fd;
-  q->q_tail = (q->q_tail + 1) % MAX_BUF_TASKS;
+  q->q_tail                = (q->q_tail + 1) % MAX_BUF_TASKS;
   q->q_count++;
+  q->filesize = request_get_filesize(conn_fd);
 
   pthread_cond_signal(&q->q_full);
   pthread_mutex_unlock(&q->q_mutex);
 }
 
-int task_queue_pop(task_queue_t *q) {
+int task_queue_pop(task_queue_t* q) {
   pthread_mutex_lock(&q->q_mutex);
-  int conn_fd = -1; // set default to an error
+  int conn_fd = NONE_CONN_FD; // set default to an error
 
   /*when the buffer is empty, just wait*/
-  while (q->q_count == 0) {
-    pthread_cond_wait(&q->q_full, &q->q_mutex);
-  }
+  queue_wait_not_empty(q);
 
   conn_fd = q->task_queue[q->q_head];
-  assert(conn_fd != -1);
+  assert(conn_fd != NONE_CONN_FD);
   q->q_head = (q->q_head + 1) % MAX_BUF_TASKS;
   q->q_count--;
 
@@ -75,14 +126,65 @@ int task_queue_pop(task_queue_t *q) {
   return conn_fd;
 }
 
-int is_smallest(task_queue_t *q, int conn_fd) { return TRUE; }
+int task_queue_not_empty(task_queue_t* q) {
+  return q->q_count > 0;
+}
+
+int find_smallest_idx(task_queue_t* q) {
+  int smallest_idx = q->q_head;
+  assert(task_queue_not_empty(q));
+  int smallest_element = q->task_queue[smallest_idx];
+
+  for (int i = q->q_head + 1; i < q->q_tail; i++) {
+    if (q->task_queue[i] <= smallest_element) {
+      smallest_idx = i;
+    }
+  }
+
+  return smallest_idx;
+}
+
+void delete_smallest_idx(task_queue_t* q, int smallest_idx) {
+  for (int i = smallest_idx; i < q->q_tail; i++) {
+    q->task_queue[i] = q->task_queue[i + 1];
+  }
+  q->q_count--;
+  q->q_tail = (q->q_tail - 1) % MAX_BUF_TASKS;
+}
+
+int task_queue_pop_SFF(task_queue_t* q) {
+  pthread_mutex_lock(&q->q_mutex);
+  int conn_fd      = NONE_CONN_FD; // set default to an error
+  int smallest_idx = NONE_SMALLEST_IDX;
+
+  /*when the buffer is empty, just wait*/
+  queue_wait_not_empty(q);
+
+  /*find the smallest filesize(index)*/
+  smallest_idx = find_smallest_idx(q);
+  assert(smallest_idx != NONE_SMALLEST_IDX);
+
+  /*delete the smallest filesize(by index) and pop*/
+  delete_smallest_idx(q, smallest_idx);
+
+  pthread_cond_signal(&q->q_empty);
+  pthread_mutex_unlock(&q->q_mutex);
+  return conn_fd;
+}
 
 /*define the work thread*/
-void *worker_thread(void *arg) {
+void* worker_thread(void* arg) {
   while (1) {
     /* already handle the sync in the task_queue_pop()*/
     /*thread will wait because of the q_cond*/
-    int conn_fd = task_queue_pop(&q);
+    int conn_fd = NONE_FD;
+
+    if (q.is_SFF == TRUE) {
+      conn_fd = task_queue_pop_SFF(&q);
+    } else if (q.is_SFF == FALSE) {
+      conn_fd = task_queue_pop(&q);
+    }
+    assert(conn_fd != NONE_FD);
 
     /*handle the things*/
     request_handle(conn_fd);
@@ -95,12 +197,12 @@ void *worker_thread(void *arg) {
 // prompt> ./wserver [-d basedir] [-p port] [-t threads] [-b buffers] [-s
 // schedalg]
 //
-int main(int argc, char *argv[]) {
-  int c;
-  char *root_dir = default_root;
-  char *schedalg = default_schedalg;
-  int port = 10000;
-  int thread_num = 1; // set default thread num to 1
+int main(int argc, char* argv[]) {
+  int   c;
+  char* root_dir   = default_root;
+  char* schedalg   = default_schedalg;
+  int   port       = 10000;
+  int   thread_num = 1; // set default thread num to 1
 
   while ((c = getopt(argc, argv, "d:p:t:b:s:")) != -1)
     switch (c) {
@@ -129,7 +231,13 @@ int main(int argc, char *argv[]) {
   chdir_or_die(root_dir);
 
   // create thead pool(able to handle requests)
-  task_queue_init(&q); // init the task_queue
+  if (strcmp(schedalg, "FIFO") == 0) {
+    task_queue_init(&q, FALSE); // init the task_queue
+  } else if (strcmp(schedalg, "SFF") == 0) {
+    task_queue_init(&q, TRUE);
+  } else {
+    task_queue_init(&q, FALSE);
+  }
   pthread_t tids[thread_num];
   for (int i = 0; i < thread_num; i++) {
     pthread_create(&tids[i], NULL, worker_thread, NULL);
@@ -139,14 +247,9 @@ int main(int argc, char *argv[]) {
   int listen_fd = open_listen_fd_or_die(port);
   while (1) {
     struct sockaddr_in client_addr;
-    int client_len = sizeof(client_addr);
-    int conn_fd = accept_or_die(listen_fd, (sockaddr_t *)&client_addr,
-                                (socklen_t *)&client_len);
+    int                client_len = sizeof(client_addr);
+    int conn_fd = accept_or_die(listen_fd, (sockaddr_t*)&client_addr, (socklen_t*)&client_len);
 
-    /*如果调度策略是SFF并且当前conn_fd就是最小的那一个就立即执行*/
-    if (strcmp(schedalg, "SFF") == 0 && is_smallest(&q, conn_fd)) {
-      ;
-    }
     task_queue_push(&q, conn_fd); // add conn_fd to buf_tasks(queue)
     /*Should not handle the data in master thread*/
     //    request_handle(conn_fd);
