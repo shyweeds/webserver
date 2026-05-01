@@ -1,3 +1,10 @@
 /my_review
 /src/compile_commands.json
 /src/gdb.txt
+/src/io_helper.o
+/src/request.o
+/src/spin.cgi
+/src/wclient
+/src/wclient.o
+/src/wserver
+/src/wserver.o
