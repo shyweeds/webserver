@@ -3,6 +3,7 @@
 
 #include <assert.h>
 #include <bits/pthreadtypes.h>
+#include <fcntl.h>
 #include <pthread.h>
 #include <stdio.h>
 #include <string.h>
@@ -16,6 +17,9 @@
 #define NONE_FILESIZE -2
 #define NONE_SMALLEST_IDX -3
 #define NONE_CONN_FD -4
+#define NONE_STAT_BUF NULL
+#define NONE_FILENAME NULL
+#define NONE_IS_STATIC -5
 char default_root[]     = ".";
 char default_schedalg[] = "FIFO";
 
@@ -25,29 +29,34 @@ typedef struct {
   int             q_head;                    // head pointer of task queue
   int             q_tail;                    // tail pointer of task queue
   int             q_count;                   // count number of task queue
-  int             filesize;                  // (SFF)indicate requested filesize(if exist)
   int             is_SFF;                    // whether is_SFF
+  int             file_is_static;            // whether file is static
   pthread_mutex_t q_mutex;                   // task queue mutex init
   pthread_cond_t  q_empty;                   // task queue cond init
   pthread_cond_t  q_full;                    // task queue cond init
+  struct stat*    stat_buf;                  //(SFF) buf info
+  char*           filename;                  // filename
 } task_queue_t;
 
 // need an task_queue_t(sync)
 task_queue_t q;
 
 void task_queue_init(task_queue_t* q, int is_SFF) {
-  q->buf_tasks = 1;                      // set default buffer size
-  q->q_head    = 0;                      // head pointer of task queue
-  q->q_tail    = 0;                      // tail pointer of task queue
-  q->q_count   = 0;                      // count number of task queue
-  q->filesize  = NONE_FILESIZE;          // 初始化没有smallest filesize for SFF
-  q->is_SFF    = is_SFF;                 //(schedalg)is_SFF
+  q->buf_tasks      = 1;              // set default buffer size
+  q->q_head         = 0;              // head pointer of task queue
+  q->q_tail         = 0;              // tail pointer of task queue
+  q->q_count        = 0;              // count number of task queue
+  q->file_is_static = NONE_IS_STATIC; // whether file is static
+  q->is_SFF         = is_SFF;         //(schedalg)is_SFF
+  q->stat_buf       = NONE_STAT_BUF;
+  q->filename       = NONE_FILENAME;
+
   pthread_mutex_init(&q->q_mutex, NULL); // task queue mutex init
   pthread_cond_init(&q->q_full, NULL);   // task queue cond init
   pthread_cond_init(&q->q_empty, NULL);  // task queue cond init
 }
 
-int request_get_filesize(int fd) {
+void request_parse(task_queue_t* q, int fd) {
   int         is_static;
   struct stat sbuf;
   char        buf[MAXBUF], method[MAXBUF], uri[MAXBUF], version[MAXBUF];
@@ -59,17 +68,22 @@ int request_get_filesize(int fd) {
 
   if (strcasecmp(method, "GET")) {
     request_error(fd, method, "501", "Not Implemented", "server does not implement this method");
-    return NONE_FILESIZE;
+    return;
   }
   request_read_headers(fd);
 
   is_static = request_parse_uri(uri, filename, cgiargs);
   if (stat(filename, &sbuf) < 0) {
     request_error(fd, filename, "404", "Not found", "server could not find this file");
-    return NONE_FILESIZE;
+    return;
   }
 
-  return sbuf.st_size;
+  /*need to add to queue elements*/
+  q->file_is_static = is_static;
+  q->stat_buf       = (struct stat*)malloc(sizeof(struct stat));
+  *q->stat_buf      = sbuf;
+  q->filename       = (char*)malloc(sizeof(filename));
+  strcpy(q->filename, filename);
 }
 
 /*push the ready conn_fd to buffer which will be handled by worker threads in
@@ -103,7 +117,9 @@ void task_queue_push(task_queue_t* q, int conn_fd) {
   q->task_queue[q->q_tail] = conn_fd;
   q->q_tail                = (q->q_tail + 1) % MAX_BUF_TASKS;
   q->q_count++;
-  q->filesize = request_get_filesize(conn_fd);
+
+  /*q->filesize*/
+  request_parse(q, conn_fd);
 
   pthread_cond_signal(&q->q_full);
   pthread_mutex_unlock(&q->q_mutex);
@@ -136,7 +152,7 @@ int find_smallest_idx(task_queue_t* q) {
   int smallest_element = q->task_queue[smallest_idx];
 
   for (int i = q->q_head + 1; i < q->q_tail; i++) {
-    if (q->task_queue[i] <= smallest_element) {
+    if (q->stat_buf->st_size <= smallest_element) {
       smallest_idx = i;
     }
   }
