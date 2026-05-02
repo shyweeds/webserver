@@ -4,6 +4,7 @@
 #include <pthread.h>
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdio.h>
 #include <sys/stat.h>
 
 #define MAX_CAPACITY 1024
@@ -17,11 +18,9 @@
 #define NONE_IS_STATIC -5
 
 typedef struct {
-  int         conn_fd;          // connected socket fd
-  bool        file_is_static;   // whether file is static
-  struct stat stat_buf;         //(SFF) buf info
-  char        filename[MAXBUF]; // filename
-  char        cgiargs[MAXBUF];  // .cgi 's args
+  int   conn_fd;          // connected socket fd
+  off_t filesize;         // filesize
+  bool  error_occur_flag; // error flag(true:error occur)
 } task_t;
 
 typedef struct {
@@ -30,11 +29,15 @@ typedef struct {
   size_t          q_head;                   // head pointer of task queue
   size_t          q_tail;                   // tail pointer of task queue
   size_t          q_count;                  // count number of task queue
-  task_t          q_target_task;            // state machine(which task to handle)
+  task_t          q_current_task;           // state machine(current task to handle)
   task_t          task_queue[MAX_CAPACITY]; // task queue
   pthread_mutex_t q_mutex;                  // task queue mutex init
   pthread_cond_t  q_empty;                  // task queue cond init
   pthread_cond_t  q_full;                   // task queue cond init
 } task_queue_t;
+
+void die(const char* msg) {
+  fprintf(stderr, "Fatal error: %s\n", msg);
+}
 
 #endif
