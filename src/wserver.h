@@ -18,9 +18,12 @@
 #define NONE_IS_STATIC -5
 
 typedef struct {
-  int   conn_fd;          // connected socket fd
-  off_t filesize;         // filesize
-  bool  error_occur_flag; // error flag(true:error occur)
+  int         conn_fd;          // connected socket fd
+  bool        error_occur_flag; // error flag(true:error occur)
+  bool        file_is_static;   // file is static
+  char        filename[MAXBUF]; // request handle
+  char        cgiargs[MAXBUF];  // request handle
+  struct stat sbuf;             // request handle
 } task_t;
 
 typedef struct {
@@ -36,8 +39,6 @@ typedef struct {
   pthread_cond_t  q_full;                   // task queue cond init
 } task_queue_t;
 
-void die(const char* msg) {
-  fprintf(stderr, "Fatal error: %s\n", msg);
-}
+void my_die(const char* msg);
 
 #endif

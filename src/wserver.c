@@ -17,6 +17,10 @@ static char   default_root[]     = ".";
 static char   default_schedalg[] = "FIFO";
 static task_t initializer        = {0}; // init the q->q_target_task
 
+void my_die(const char* msg) {
+  fprintf(stderr, "Fatal error: %s\n", msg);
+}
+
 void task_queue_init(task_queue_t* q, int is_SFF) {
   q->capacity       = 1;           // set default buffer size
   q->q_head         = 0;           // head pointer of task queue
@@ -35,26 +39,29 @@ bool request_parse(task_queue_t* q) {
   char        filename[MAXBUF], cgiargs[MAXBUF];
   int         is_static;
   struct stat sbuf;
-  task_t      current_task = q->q_current_task;
+  task_t*     current_task = &q->q_current_task;
 
-  readline_or_die(current_task.conn_fd, buf, MAXBUF);
+  readline_or_die(current_task->conn_fd, buf, MAXBUF);
   sscanf(buf, "%s %s %s", method, uri, version);
   printf("method:%s uri:%s version:%s\n", method, uri, version);
 
   if (strcasecmp(method, "GET")) {
-    request_error(current_task.conn_fd, method, "501", "Not Implemented",
+    request_error(current_task->conn_fd, method, "501", "Not Implemented",
                   "server does not implement this method");
     return false;
   }
 
   is_static = request_parse_uri(uri, filename, cgiargs);
   if (stat(filename, &sbuf) < 0) {
-    request_error(current_task.conn_fd, filename, "404", "Not found",
+    request_error(current_task->conn_fd, filename, "404", "Not found",
                   "server could not find this file");
     return false;
   }
 
-  current_task.filesize = sbuf.st_size;
+  current_task->file_is_static = is_static;
+  strcpy(current_task->filename, filename);
+  strcpy(current_task->cgiargs, cgiargs);
+  current_task->sbuf = sbuf;
   return true;
   /*request_read_headers(fd);
 
@@ -115,16 +122,13 @@ void task_queue_push(task_queue_t* q) {
 
 int task_queue_pop(task_queue_t* q) {
   pthread_mutex_lock(&q->q_mutex);
-  int     conn_fd = NONE_CONN_FD; // set default to an error
-  task_t* task    = &q->task_queue[q->q_head];
+  task_t* current_task = &q->q_current_task;
 
   /*when the buffer is empty, just wait*/
   queue_wait_not_empty(q);
 
   /*set target tasks to be handle*/
-  q->q_target_task = *task;
-  conn_fd          = q->q_target_task.conn_fd;
-  assert(conn_fd != NONE_CONN_FD);
+  *current_task = q->task_queue[q->q_head + 1];
 
   /*update struct's state*/
   q->q_head = (q->q_head + 1) % MAX_CAPACITY;
@@ -132,7 +136,7 @@ int task_queue_pop(task_queue_t* q) {
 
   pthread_cond_signal(&q->q_empty);
   pthread_mutex_unlock(&q->q_mutex);
-  return conn_fd;
+  return current_task->conn_fd;
 }
 
 int task_queue_not_empty(task_queue_t* q) {
@@ -143,10 +147,10 @@ int find_smallest_idx(task_queue_t* q) {
   int smallest_idx = q->q_head;
 
   assert(task_queue_not_empty(q));
-  int smallest_element = q->task_queue[q->q_head].stat_buf.st_size;
+  int smallest_element = q->task_queue[q->q_head].sbuf.st_size;
 
   for (int i = q->q_head + 1; i < q->q_tail; i++) {
-    if (q->task_queue[i].stat_buf.st_size <= smallest_element) {
+    if (q->task_queue[i].sbuf.st_size <= smallest_element) {
       smallest_idx = i;
     }
   }
@@ -163,28 +167,21 @@ void delete_smallest_task(task_queue_t* q, int smallest_idx) {
 
 int task_queue_pop_SFF(task_queue_t* q) {
   pthread_mutex_lock(&q->q_mutex);
-  int conn_fd      = NONE_CONN_FD; // set default to an error
-  int smallest_idx = NONE_SMALLEST_IDX;
+  int     smallest_idx = NONE_SMALLEST_IDX;
+  task_t* current_task = &q->q_current_task;
 
   /*when the buffer is empty, just wait*/
   queue_wait_not_empty(q);
 
-  /*find the smallest filesize(index)*/
-  smallest_idx = find_smallest_idx(q);
-  assert(smallest_idx != NONE_SMALLEST_IDX);
-
   /*update target task to be handle*/
-  task_t* smallest_task = &q->task_queue[smallest_idx];
-  q->q_target_task      = *smallest_task;
-  conn_fd               = q->q_target_task.conn_fd;
-  assert(conn_fd != NONE_CONN_FD);
+  *current_task = q->task_queue[find_smallest_idx(q)];
 
   /*delete the smallest filesize(by index) and pop*/
   delete_smallest_task(q, smallest_idx);
 
   pthread_cond_signal(&q->q_empty);
   pthread_mutex_unlock(&q->q_mutex);
-  return conn_fd;
+  return current_task->conn_fd;
 }
 
 /*define the work thread*/
@@ -218,16 +215,16 @@ void task_queue_push_handle_error(task_queue_t* q) {
   } else if (error_occur == false) {
     return; // do nothing
   } else {
-    die("task_queue_push():unknown error");
+    my_die("task_queue_push():unknown error");
     exit(1);
   }
 }
 
 void init_current_task(task_queue_t* q, int current_fd) {
-  task_t current_task           = q->q_current_task;
-  current_task.conn_fd          = current_fd;
-  current_task.error_occur_flag = false;
-  current_task.filesize         = NONE_FILESIZE;
+  task_t* current_task           = &q->q_current_task;
+  current_task->conn_fd          = current_fd;
+  current_task->error_occur_flag = false;
+  current_task->file_is_static   = false;
 }
 //
 // prompt> ./wserver [-d basedir] [-p port] [-t threads] [-b buffers] [-s
@@ -240,7 +237,6 @@ int main(int argc, char* argv[]) {
   size_t       port       = 10000;
   size_t       thread_num = 1; // set default thread num to 1
   task_queue_t q;              // need an task_queue_t(sync)
-  task_t       current_task = q.q_current_task;
 
   while ((c = getopt(argc, argv, "d:p:t:b:s:")) != -1)
     switch (c) {
