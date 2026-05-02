@@ -1,0 +1,40 @@
+#ifndef __WSERVER_H__
+#define __WSERVER_H__
+
+#include <pthread.h>
+#include <stdbool.h>
+#include <stddef.h>
+#include <sys/stat.h>
+
+#define MAX_CAPACITY 1024
+#define MAXBUF (8192)
+#define NONE_FD -1
+#define NONE_FILESIZE -2
+#define NONE_SMALLEST_IDX -3
+#define NONE_CONN_FD -4
+#define NONE_STAT_BUF NULL
+#define NONE_FILENAME NULL
+#define NONE_IS_STATIC -5
+
+typedef struct {
+  int         conn_fd;          // connected socket fd
+  bool        file_is_static;   // whether file is static
+  struct stat stat_buf;         //(SFF) buf info
+  char        filename[MAXBUF]; // filename
+  char        cgiargs[MAXBUF];  // .cgi 's args
+} task_t;
+
+typedef struct {
+  bool            is_SFF;                   // whether is_SFF
+  size_t          capacity;                 // set default buffer size
+  size_t          q_head;                   // head pointer of task queue
+  size_t          q_tail;                   // tail pointer of task queue
+  size_t          q_count;                  // count number of task queue
+  task_t          q_target_task;            // state machine(which task to handle)
+  task_t          task_queue[MAX_CAPACITY]; // task queue
+  pthread_mutex_t q_mutex;                  // task queue mutex init
+  pthread_cond_t  q_empty;                  // task queue cond init
+  pthread_cond_t  q_full;                   // task queue cond init
+} task_queue_t;
+
+#endif

@@ -2,6 +2,7 @@
 
 #include "io_helper.h"
 
+#include <sys/stat.h>
 //
 // Some of this code stolen from Bryant/O'Halloran
 // Hopefully this is not a problem ... :)
@@ -146,7 +147,8 @@ void request_serve_static(int fd, char* filename, int filesize) {
 }
 
 // handle a request
-void request_handle(int fd) {
+void request_handle(task_queue_t* q) {
+  /*
   int         is_static;
   struct stat sbuf;
   char        buf[MAXBUF], method[MAXBUF], uri[MAXBUF], version[MAXBUF];
@@ -166,19 +168,24 @@ void request_handle(int fd) {
   if (stat(filename, &sbuf) < 0) {
     request_error(fd, filename, "404", "Not found", "server could not find this file");
     return;
-  }
+  }*/
 
-  if (is_static) {
-    if (!(S_ISREG(sbuf.st_mode)) || !(S_IRUSR & sbuf.st_mode)) {
-      request_error(fd, filename, "403", "Forbidden", "server could not read this file");
+  task_t* task     = &q->q_target_task;
+  mode_t  mode     = task->stat_buf.st_mode;
+  off_t   filesize = task->stat_buf.st_size;
+  if (task->file_is_static) {
+    if (!(S_ISREG(mode)) || !(S_IRUSR & mode)) {
+      request_error(task->conn_fd, task->filename, "403", "Forbidden",
+                    "server could not read this file");
       return;
     }
-    request_serve_static(fd, filename, sbuf.st_size);
+    request_serve_static(task->conn_fd, task->filename, filesize);
   } else {
-    if (!(S_ISREG(sbuf.st_mode)) || !(S_IXUSR & sbuf.st_mode)) {
-      request_error(fd, filename, "403", "Forbidden", "server could not run this CGI program");
+    if (!(S_ISREG(mode)) || !(S_IXUSR & mode)) {
+      request_error(task->conn_fd, task->filename, "403", "Forbidden",
+                    "server could not run this CGI program");
       return;
     }
-    request_serve_dynamic(fd, filename, cgiargs);
+    request_serve_dynamic(task->conn_fd, task->filename, task->cgiargs);
   }
 }
