@@ -245,11 +245,10 @@ int main(int argc, char* argv[]) {
     task_queue_init(q, false);
   }
 
-  /* pthread_t tids[thread_num];
-    for (int i = 0; i < thread_num; i++) {
-      pthread_create(&tids[i], NULL, worker_thread, (void*)q);
-    }
-    */
+  pthread_t tids[thread_num];
+  for (int i = 0; i < thread_num; i++) {
+    pthread_create(&tids[i], NULL, worker_thread, (void*)q);
+  }
 
   // now, get to work
   int listen_fd = open_listen_fd_or_die(port);
