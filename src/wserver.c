@@ -87,30 +87,29 @@ void queue_wait_not_empty(task_queue_t* q) {
   }
 }
 
-void add_current_task_to_queue(task_queue_t* q) {
-  q->task_queue[q->q_tail] = q->q_current_task;
+void add_current_task_to_queue(task_queue_t* q, task_t* local_task) {
+  q->task_queue[q->q_tail] = *local_task;
 }
 
-void set_current_task_error_flag(task_queue_t* q) {
-  q->q_current_task.error_occur_flag = true;
+void set_current_task_error_flag(task_t* local_task) {
+  local_task->error_occur_flag = true;
 }
 
 void task_queue_push(task_queue_t* q, task_t* local_task) {
-  pthread_mutex_lock(&q->q_mutex);
-
-  /*when the buffer is full, just wait*/
-  queue_wait_not_full(q);
-
   if (request_parse(q, local_task) == true) {
-    add_current_task_to_queue(q);
+    pthread_mutex_lock(&q->q_mutex);
+    queue_wait_not_full(q);
+
+    add_current_task_to_queue(q, local_task);
     q->q_tail = (q->q_tail + 1) % MAX_CAPACITY;
     q->q_count++;
-  } else {
-    set_current_task_error_flag(q);
-  }
 
-  pthread_cond_signal(&q->q_full);
-  pthread_mutex_unlock(&q->q_mutex);
+    pthread_cond_signal(&q->q_full);
+    pthread_mutex_unlock(&q->q_mutex);
+
+  } else {
+    set_current_task_error_flag(local_task);
+  }
 }
 
 int task_queue_pop(task_queue_t* q) {
@@ -199,13 +198,13 @@ void* worker_thread(void* arg) {
   return NULL;
 }
 
-void task_queue_push_handle_error(task_queue_t* q) {
-  bool   error_occur  = q->q_current_task.error_occur_flag;
-  task_t current_task = q->q_current_task;
+void task_queue_push_handle_error(task_t* local_task) {
+  bool error_occur = local_task->error_occur_flag;
   if (error_occur == true) {
-    close_or_die(current_task.conn_fd);
+    close_or_die(local_task->conn_fd);
     error_occur = false;
   } else if (error_occur == false) {
+    LOG("master thread: task not 404 or 'not GET' -> OK!\n");
     return; // do nothing
   }
 }
@@ -277,7 +276,7 @@ int main(int argc, char* argv[]) {
     local_task.conn_fd          = conn_fd;
     local_task.error_occur_flag = false;
     task_queue_push(q, &local_task); // add conn_fd to buf_tasks(queue)
-    task_queue_push_handle_error(q);
+    task_queue_push_handle_error(&local_task);
 
     /*Should not handle the data in master thread*/
     //    request_handle(conn_fd);
