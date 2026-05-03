@@ -17,51 +17,44 @@ static char   default_root[]     = ".";
 static char   default_schedalg[] = "FIFO";
 static task_t initializer        = {0}; // init the q->q_target_task
 
-void my_die(const char* msg) {
-  fprintf(stderr, "Fatal error: %s\n", msg);
-}
-
 void task_queue_init(task_queue_t* q, int is_SFF) {
-  q->capacity       = 1;           // set default buffer size
-  q->q_head         = 0;           // head pointer of task queue
-  q->q_tail         = 0;           // tail pointer of task queue
-  q->q_count        = 0;           // count number of task queue
-  q->is_SFF         = is_SFF;      //(schedalg)is_SFF
-  q->q_current_task = initializer; // default:target task to be handled
+  q->q_head  = 0;      // head pointer of task queue
+  q->q_tail  = 0;      // tail pointer of task queue
+  q->q_count = 0;      // count number of task queue
+  q->is_SFF  = is_SFF; //(schedalg)is_SFF
 
   pthread_mutex_init(&q->q_mutex, NULL); // task queue mutex init
   pthread_cond_init(&q->q_full, NULL);   // task queue cond init
   pthread_cond_init(&q->q_empty, NULL);  // task queue cond init
 }
 
-bool request_parse(task_queue_t* q) {
+bool request_parse(task_queue_t* q, task_t* local_task) {
   char        buf[MAXBUF], method[MAXBUF], uri[MAXBUF], version[MAXBUF];
   char        filename[MAXBUF], cgiargs[MAXBUF];
   int         is_static;
   struct stat sbuf;
-  task_t*     current_task = &q->q_current_task;
 
-  readline_or_die(current_task->conn_fd, buf, MAXBUF);
+  readline_or_die(local_task->conn_fd, buf, MAXBUF);
   sscanf(buf, "%s %s %s", method, uri, version);
   printf("method:%s uri:%s version:%s\n", method, uri, version);
 
   if (strcasecmp(method, "GET")) {
-    request_error(current_task->conn_fd, method, "501", "Not Implemented",
+    request_error(local_task->conn_fd, method, "501", "Not Implemented",
                   "server does not implement this method");
     return false;
   }
 
   is_static = request_parse_uri(uri, filename, cgiargs);
   if (stat(filename, &sbuf) < 0) {
-    request_error(current_task->conn_fd, filename, "404", "Not found",
+    request_error(local_task->conn_fd, filename, "404", "Not found",
                   "server could not find this file");
     return false;
   }
 
-  current_task->file_is_static = is_static;
-  strcpy(current_task->filename, filename);
-  strcpy(current_task->cgiargs, cgiargs);
-  current_task->sbuf = sbuf;
+  local_task->file_is_static = is_static;
+  strcpy(local_task->filename, filename);
+  strcpy(local_task->cgiargs, cgiargs);
+  local_task->sbuf = sbuf;
   return true;
   /*request_read_headers(fd);
 
@@ -102,13 +95,13 @@ void set_current_task_error_flag(task_queue_t* q) {
   q->q_current_task.error_occur_flag = true;
 }
 
-void task_queue_push(task_queue_t* q) {
+void task_queue_push(task_queue_t* q, task_t* local_task) {
   pthread_mutex_lock(&q->q_mutex);
 
   /*when the buffer is full, just wait*/
   queue_wait_not_full(q);
 
-  if (request_parse(q) == true) {
+  if (request_parse(q, local_task) == true) {
     add_current_task_to_queue(q);
     q->q_tail = (q->q_tail + 1) % MAX_CAPACITY;
     q->q_count++;
@@ -128,7 +121,7 @@ int task_queue_pop(task_queue_t* q) {
   queue_wait_not_empty(q);
 
   /*set target tasks to be handle*/
-  *current_task = q->task_queue[q->q_head + 1];
+  *current_task = q->task_queue[q->q_head];
 
   /*update struct's state*/
   q->q_head = (q->q_head + 1) % MAX_CAPACITY;
@@ -167,14 +160,14 @@ void delete_smallest_task(task_queue_t* q, int smallest_idx) {
 
 int task_queue_pop_SFF(task_queue_t* q) {
   pthread_mutex_lock(&q->q_mutex);
-  int     smallest_idx = NONE_SMALLEST_IDX;
+  int     smallest_idx = find_smallest_idx(q);
   task_t* current_task = &q->q_current_task;
 
   /*when the buffer is empty, just wait*/
   queue_wait_not_empty(q);
 
   /*update target task to be handle*/
-  *current_task = q->task_queue[find_smallest_idx(q)];
+  *current_task = q->task_queue[smallest_idx];
 
   /*delete the smallest filesize(by index) and pop*/
   delete_smallest_task(q, smallest_idx);
@@ -214,29 +207,22 @@ void task_queue_push_handle_error(task_queue_t* q) {
     error_occur = false;
   } else if (error_occur == false) {
     return; // do nothing
-  } else {
-    my_die("task_queue_push():unknown error");
-    exit(1);
   }
 }
 
-void init_current_task(task_queue_t* q, int current_fd) {
-  task_t* current_task           = &q->q_current_task;
-  current_task->conn_fd          = current_fd;
-  current_task->error_occur_flag = false;
-  current_task->file_is_static   = false;
-}
 //
 // prompt> ./wserver [-d basedir] [-p port] [-t threads] [-b buffers] [-s
 // schedalg]
 //
 int main(int argc, char* argv[]) {
-  int          c;
-  char*        root_dir   = default_root;
-  char*        schedalg   = default_schedalg;
-  size_t       port       = 10000;
-  size_t       thread_num = 1; // set default thread num to 1
-  task_queue_t q;              // need an task_queue_t(sync)
+  int           c;
+  char*         root_dir   = default_root;
+  char*         schedalg   = default_schedalg;
+  size_t        port       = 10000;
+  size_t        thread_num = 1;   // set default thread num to 1
+  task_t        local_task = {0}; // local task to be handle
+  task_queue_t* q          = (task_queue_t*)malloc(sizeof(*q));
+  ; // need an task_queue_t(sync)
 
   while ((c = getopt(argc, argv, "d:p:t:b:s:")) != -1)
     switch (c) {
@@ -250,7 +236,7 @@ int main(int argc, char* argv[]) {
       thread_num = atoi(optarg);
       break;
     case 'b':
-      q.capacity = atoi(optarg);
+      q->capacity = atoi(optarg);
       break;
     case 's':
       schedalg = optarg;
@@ -261,21 +247,23 @@ int main(int argc, char* argv[]) {
       exit(1);
     }
 
-  // run at this directory
+  // run at root_dir directory
   chdir_or_die(root_dir);
 
   // create thead pool(able to handle requests)
   if (strcmp(schedalg, "FIFO") == 0) {
-    task_queue_init(&q, false); // init the task_queue
+    task_queue_init(q, false); // init the task_queue
   } else if (strcmp(schedalg, "SFF") == 0) {
-    task_queue_init(&q, true);
+    task_queue_init(q, true);
   } else {
-    task_queue_init(&q, false);
+    task_queue_init(q, false);
   }
-  pthread_t tids[thread_num];
-  for (int i = 0; i < thread_num; i++) {
-    pthread_create(&tids[i], NULL, worker_thread, (void*)&q);
-  }
+
+  /* pthread_t tids[thread_num];
+    for (int i = 0; i < thread_num; i++) {
+      pthread_create(&tids[i], NULL, worker_thread, (void*)q);
+    }
+    */
 
   // now, get to work
   int listen_fd = open_listen_fd_or_die(port);
@@ -283,14 +271,18 @@ int main(int argc, char* argv[]) {
     struct sockaddr_in client_addr;
     int                client_len = sizeof(client_addr);
     int conn_fd = accept_or_die(listen_fd, (sockaddr_t*)&client_addr, (socklen_t*)&client_len);
+    /******test*****/
+    LOG("main():conn_fd = %d(>0)\n", conn_fd);
 
-    init_current_task(&q, conn_fd);
-    task_queue_push(&q); // add conn_fd to buf_tasks(queue)
-    task_queue_push_handle_error(&q);
+    local_task.conn_fd          = conn_fd;
+    local_task.error_occur_flag = false;
+    task_queue_push(q, &local_task); // add conn_fd to buf_tasks(queue)
+    task_queue_push_handle_error(q);
 
     /*Should not handle the data in master thread*/
     //    request_handle(conn_fd);
-    //    close_or_die(conn_fd);
+    // close_or_die(conn_fd);
   }
+  free(q);
   return 0;
 }

@@ -18,8 +18,8 @@
 #define NONE_IS_STATIC -5
 #define LOG(fmt, ...)                                                                              \
   do {                                                                                             \
-    fprintf(stderr, "[T%lu][%s:%d]" fmt "\n", (unsigned long)pthread_self(), __FILE__, __LINE__,   \
-            ##__VA_ARGS_);                                                                         \
+    fprintf(stderr, "[Thread:%lu][%s:%d]" fmt "\n", (unsigned long)pthread_self(), __FILE__,       \
+            __LINE__, ##__VA_ARGS__);                                                              \
   } while (0)
 
 typedef struct {
@@ -37,13 +37,10 @@ typedef struct {
   size_t          q_head;                   // head pointer of task queue
   size_t          q_tail;                   // tail pointer of task queue
   size_t          q_count;                  // count number of task queue
-  task_t          q_current_task;           // state machine(current task to handle)
   task_t          task_queue[MAX_CAPACITY]; // task queue
   pthread_mutex_t q_mutex;                  // task queue mutex init
   pthread_cond_t  q_empty;                  // task queue cond init
   pthread_cond_t  q_full;                   // task queue cond init
 } task_queue_t;
-
-void my_die(const char* msg);
 
 #endif

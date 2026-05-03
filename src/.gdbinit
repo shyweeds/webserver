@@ -4,8 +4,8 @@ file ./wserver
 # set args
 set args -d ./basedir/ -p 8003 -t 1 -b 1 -s FIFO
 
-# layout
-layout src
+# layout no src(just look at nvim + gdb cli is ok!) 
+# layout src
 
 # fork and exec
 set follow-fork-mode parent
@@ -22,9 +22,17 @@ define hookpost-run
   set scheduler-locking step
 end
 
+# while stop:print the context
+define hook-stop
+  printf "\n==========[STOP]==========\n"
+  printf "Thread %d\n", $_thread
+  frame
+  list
+end
+
 # break points
 break main
-break 253
+break 284
 
 # auto print(like logs)
 break request_handle
