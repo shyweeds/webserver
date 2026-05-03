@@ -149,12 +149,11 @@ void request_serve_static(int fd, char* filename, int filesize) {
 }
 
 // handle a request
-void request_handle(task_queue_t* q) {
-  task_t* current_task = &q->q_current_task;
-  mode_t* mode         = &current_task->sbuf.st_mode;
-  char*   filename     = current_task->filename;
-  off_t*  filesize     = &current_task->sbuf.st_size;
-  char*   cgiargs      = current_task->cgiargs;
+void request_handle(task_t* local_task) {
+  mode_t      mode     = local_task->sbuf.st_mode;
+  off_t       filesize = local_task->sbuf.st_size;
+  const char* filename = local_task->filename;
+  const char* cgiargs  = local_task->cgiargs;
 
   /*readline_or_die(task.conn_fd, buf, MAXBUF);
   sscanf(buf, "%s %s %s", method, uri, version);
@@ -165,28 +164,28 @@ void request_handle(task_queue_t* q) {
                   "server does not implement this method");
     return;
   }*/
-  request_read_headers(current_task->conn_fd);
+  request_read_headers(local_task->conn_fd);
   /*
     is_static = request_parse_uri(uri, filename, cgiargs);
     if (stat(filename, &sbuf) < 0) {
-      request_error(current_task->conn_fd, filename, "404", "Not found",
+      request_error(local_task->conn_fd, filename, "404", "Not found",
                     "server could not find this file");
       return;
     }
   */
-  if (current_task->file_is_static) {
-    if (!(S_ISREG(*mode)) || !(S_IRUSR & *mode)) {
-      request_error(current_task->conn_fd, filename, "403", "Forbidden",
+  if (local_task->file_is_static) {
+    if (!(S_ISREG(mode)) || !(S_IRUSR & mode)) {
+      request_error(local_task->conn_fd, filename, "403", "Forbidden",
                     "server could not read this file");
       return;
     }
-    request_serve_static(current_task->conn_fd, filename, *filesize);
+    request_serve_static(local_task->conn_fd, filename, filesize);
   } else {
-    if (!(S_ISREG(*mode)) || !(S_IXUSR & *mode)) {
-      request_error(current_task->conn_fd, filename, "403", "Forbidden",
+    if (!(S_ISREG(mode)) || !(S_IXUSR & mode)) {
+      request_error(local_task->conn_fd, filename, "403", "Forbidden",
                     "server could not run this CGI program");
       return;
     }
-    request_serve_dynamic(current_task->conn_fd, filename, cgiargs);
+    request_serve_dynamic(local_task->conn_fd, filename, cgiargs);
   }
 }
