@@ -2,7 +2,7 @@
 file ./wserver
 
 # set args
-set args -d ./basedir/ -p 8003 -t 8 -b 16 -s FIFO
+set args -d ./basedir/ -p 8003 -t 1 -b 1 -s FIFO
 
 # layout
 layout src

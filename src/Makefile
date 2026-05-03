@@ -3,7 +3,7 @@
 # To remove files, type "make clean"
 
 CC = gcc
-CFLAGS = -Wall -g -O0
+CFLAGS = -Wall -g -O0 -fsanitize=address
 OBJS = wserver.o wclient.o request.o io_helper.o 
 
 .SUFFIXES: .c .o 

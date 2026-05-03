@@ -16,6 +16,11 @@
 #define NONE_STAT_BUF NULL
 #define NONE_FILENAME NULL
 #define NONE_IS_STATIC -5
+#define LOG(fmt, ...)                                                                              \
+  do {                                                                                             \
+    fprintf(stderr, "[T%lu][%s:%d]" fmt "\n", (unsigned long)pthread_self(), __FILE__, __LINE__,   \
+            ##__VA_ARGS_);                                                                         \
+  } while (0)
 
 typedef struct {
   int         conn_fd;          // connected socket fd
