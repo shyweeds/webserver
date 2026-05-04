@@ -1,0 +1,27 @@
+name: C WebServer CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install deps
+        run: sudo apt update && sudo apt install -y build-essential valgrind curl
+
+      - name: Build
+        run: make
+
+      - name: Run integration tests
+        run: make test
+
+      - name: Run with ASan
+        run: |
+          make clean
+          CFLAGS="-fsanitize=address -g" make
+          make test
