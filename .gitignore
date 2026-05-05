@@ -8,3 +8,7 @@
 /src/wclient.o
 /src/wserver
 /src/wserver.o
+/build
+/bin/wserver
+/bin/wclient
+/bin/spin.cgi
