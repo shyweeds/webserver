@@ -150,10 +150,10 @@ void request_serve_static(int fd, char* filename, int filesize) {
 
 // handle a request
 void request_handle(task_t* local_task) {
-  mode_t      mode     = local_task->sbuf.st_mode;
-  off_t       filesize = local_task->sbuf.st_size;
-  const char* filename = local_task->filename;
-  const char* cgiargs  = local_task->cgiargs;
+  mode_t mode     = local_task->sbuf.st_mode;
+  off_t  filesize = local_task->sbuf.st_size;
+  char*  filename = local_task->filename;
+  char*  cgiargs  = local_task->cgiargs;
 
   /*readline_or_die(task.conn_fd, buf, MAXBUF);
   sscanf(buf, "%s %s %s", method, uri, version);
