@@ -13,3 +13,5 @@
 /bin/wclient
 /bin/spin.cgi
 /compile_commands.json
+/bin/basedir/spin.cgi
+/tests/test-out

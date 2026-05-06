@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
-set -euo pipfail
+set -euo pipefail
 
 PORT=8080
 SERVER_BIN=../bin/wserver
 CLIENT_BIN=../bin/wclient
 BASE_DIR=../bin/basedir
+TESTDIR=./tests
 TESTOUT_DIR=./test-out
 THREADS=4
 BUFFERS=4
@@ -28,8 +29,10 @@ fail() {
 
 build() {
   log "Building project..."
+  cd ..
   make clean || true # clean failed is alright
-  make
+  make >/dev/null 2>/dev/null
+  cd "$TESTDIR"
 
   [[ -f "$SERVER_BIN" ]] || fail "wserver not built"
 }
@@ -37,7 +40,7 @@ build() {
 # Server lifecycle
 start_server() {
   log "Starting server..."
-  "$SERVER_BIN" -d "$BASE_DIR" -p "$PORT" -t "$THREADS" -b "$BUFFERS" -s "$SCHEDALG" &
+  "$SERVER_BIN" -d "$BASE_DIR" -p "$PORT" -t "$THREADS" -b "$BUFFERS" -s "$SCHEDALG" 2>/dev/null &
   SERVER_PID=$!
   sleep 1
 }
@@ -51,7 +54,7 @@ stop_server() {
 test_static() {
   log "Testing static file..."
   mkdir -p "$TESTOUT_DIR"
-  body=$("$CLIENT_BIN" localhost "$PORT" /a.html )
+  body=$("$CLIENT_BIN" localhost "$PORT" /a.html)
   echo "$body" 2> "${TESTOUT_DIR}/a.html.err" > "${TESTOUT_DIR}/a.html.out" || fail "static file test failed!"
 }
 
@@ -65,7 +68,7 @@ test_cgi() {
 test_404() {
   log "Testing 404..."
   mkdir -p "$TESTOUT_DIR"
-  body=$("$CLIENT_BIN" localhost "$PORT" /notfind.html )
+  body=$("$CLIENT_BIN" localhost "$PORT" /notfind.html)
   echo "$body" 2> "${TESTOUT_DIR}/notfind.html.err" > "${TESTOUT_DIR}/notfind.html.out" || fail "404 notfind test failed!"
 }
 
