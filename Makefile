@@ -42,7 +42,7 @@ ${BUILD_DIR} ${BIN_DIR} ${BASEDIR}:
 debug: all
 	gdb -q -nx -x ./bin/.gdbinit
 
-test: all
+test:
 	tests/ci.sh
 
 clean:
