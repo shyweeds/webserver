@@ -1,5 +1,5 @@
 # load the program
-file ./wserver
+file ./bin/wserver
 
 # set args
 set args -d ./basedir/ -p 8003 -t 1 -b 1 -s FIFO
@@ -32,7 +32,6 @@ end
 
 # break points
 break main
-break 284
 
 # auto print(like logs)
 break request_handle

@@ -12,3 +12,4 @@
 /bin/wserver
 /bin/wclient
 /bin/spin.cgi
+/compile_commands.json
