@@ -42,7 +42,7 @@ debug: all
 	gdb -q -nx -x ./bin/.gdbinit
 
 test: all
-	./tests/ci.sh
+	tests/ci.sh
 
 clean:
 	-rm -f $(OBJS) \

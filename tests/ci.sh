@@ -2,11 +2,10 @@
 set -euo pipefail
 
 PORT=8080
-SERVER_BIN=../bin/wserver
-CLIENT_BIN=../bin/wclient
-BASE_DIR=../bin/basedir
-TESTDIR=./tests
-TESTOUT_DIR=./test-out
+SERVER_BIN=./bin/wserver
+CLIENT_BIN=./bin/wclient
+BASE_DIR=./bin/basedir
+TESTOUT_DIR=./tests/test-out
 THREADS=4
 BUFFERS=4
 SCHEDALG=FIFO
@@ -29,10 +28,8 @@ fail() {
 
 build() {
   log "Building project..."
-  cd ..
   make clean || true # clean failed is alright
   make >/dev/null 2>/dev/null
-  cd "$TESTDIR"
 
   [[ -f "$SERVER_BIN" ]] || fail "wserver not built"
 }
