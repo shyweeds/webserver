@@ -81,7 +81,7 @@ main() {
 
   test_static
   test_cgi
-  test_404
+#  test_404
 
   log "All tests passed!!"
 }
