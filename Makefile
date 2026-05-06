@@ -8,6 +8,7 @@ SRC_DIR := src
 BIN_DIR := bin
 BUILD_DIR := build
 BASEDIR := bin/basedir
+TEST_OUT := tests/test-out
 OBJS := ${BUILD_DIR}/wserver.o \
 				${BUILD_DIR}/wclient.o \
 				${BUILD_DIR}/request.o \
@@ -48,4 +49,5 @@ clean:
 	-rm -f $(OBJS) \
 		${BIN_DIR}/wserver \
 		${BIN_DIR}/wclient \
-		${BASEDIR}/spin.cgi
+		${BASEDIR}/spin.cgi\
+		${TEST_OUT}/*
