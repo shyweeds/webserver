@@ -27,13 +27,16 @@ ${BIN_DIR}/wclient: ${BUILD_DIR}/wclient.o ${BUILD_DIR}/io_helper.o
 		${BUILD_DIR}/wclient.o \
 		${BUILD_DIR}/io_helper.o
 
-${BASEDIR}/spin.cgi: ${SRC_DIR}/spin.c
+${BASEDIR}/spin.cgi: ${SRC_DIR}/spin.c | ${BASEDIR}
 	$(CC) $(CFLAGS) -o \
 		${BASEDIR}/spin.cgi \
 		${SRC_DIR}/spin.c
 
-${BUILD_DIR}/%.o: ${SRC_DIR}/%.c
+${BUILD_DIR}/%.o: ${SRC_DIR}/%.c | ${BUILD_DIR}
 	$(CC) $(CFLAGS) -o $@ -c $<
+
+${BUILD_DIR} ${BIN_DIR} ${BASEDIR}:
+	mkdir -p $@
 
 debug: all
 	gdb -q -nx -x ./bin/.gdbinit
