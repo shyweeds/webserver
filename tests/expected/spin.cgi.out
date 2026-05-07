@@ -1,0 +1,8 @@
+Header: HTTP/1.0 200 OK
+Header: Server: OSTEP WebServer
+Header: spin_for = 3.000000
+Header: Content-Length: 126
+Header: Content-Type: text/html
+<p>Welcome to the CGI program ()</p>
+<p>My only purpose is to waste time on the server!</p>
+<p>I spun for 3.00 seconds</p>
