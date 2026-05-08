@@ -105,6 +105,32 @@ run_parallel_case() {
   for pid in "${pids[@]}"; do
     wait "$pid"
   done
+
+  # check the status
+  for ((i=1; i<=n; i++)); do
+    status=$(cat "${TESTOUT_DIR}/status.${i}")
+
+    if [[ "$status" != "$expected_status" ]]; then
+      fail "${name}: client ${i} exit code ${status}, expected ${expected_status}"
+    fi
+
+    if [[ -n "$expected_file" ]]; then
+      if ! cmp -s "$expected_file" "${out}.${i}"; then
+        diff -u "$expected_file" "${out}.${i}" || true
+        fail "${name}: client ${i} output mismatch"
+      fi
+    else
+        fail "${name}: no expected files!!!"
+    fi
+  done
+}
+
+test_multithread_static() {
+  run_parallel_case "multithread static file test" "/a.html" "$EXPECTED_DIR/a.html.out" 0 20
+}
+
+test_multithread_cgi() {
+  run_parallel_case "multithread static file test" "/spin.cgi" "$EXPECTED_DIR/spin.cgi.out" 0 20
 }
 
 test_static() {
@@ -168,6 +194,8 @@ main() {
   test_static
   test_cgi
   test_404
+  test_multithread_static
+  test_multithread_cgi
 
   log "All tests passed!!"
 }
