@@ -173,6 +173,7 @@ void* worker_thread(void* arg) {
     task_t        local_task = {0}; // owner:worker thread
     task_queue_t* q          = (task_queue_t*)arg;
 
+    // implementation of SFF in pop()
     if (q->is_SFF == true) {
       task_queue_pop_SFF(q, &local_task); // pop to local_task
     } else if (q->is_SFF == false) {

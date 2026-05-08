@@ -38,14 +38,20 @@ build() {
 }
 
 # Tests
+
+safe_name() {
+  echo "$1" | sed 's#^/##'
+}
+
 run_case() {
   local name="$1"
   local path="$2"
   local expected_file="${3:-}"
   local expected_status="${4:-0}"
 
-  local out="${TESTOUT_DIR}/${path}.out"
-  local err="${TESTOUT_DIR}/${path}.err"
+  local filename="safe_name $path"
+  local out="${TESTOUT_DIR}/$filename.out"
+  local err="${TESTOUT_DIR}/$filename.err"
 
   log "Testing ${name}..."
 
