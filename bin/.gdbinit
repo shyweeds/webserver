@@ -2,7 +2,7 @@
 file ./bin/wserver
 
 # set args
-set args -d ./basedir/ -p 8003 -t 1 -b 1 -s FIFO
+set args -d ./bin/basedir/ -p 8003 -t 3 -b 3 -s FIFO
 
 # layout no src(just look at nvim + gdb cli is ok!) 
 # layout src
