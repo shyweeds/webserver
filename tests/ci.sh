@@ -49,7 +49,7 @@ run_case() {
   local expected_file="${3:-}"
   local expected_status="${4:-0}"
 
-  local filename="safe_name $path"
+  local filename=$(safe_name "$path")
   local out="${TESTOUT_DIR}/$filename.out"
   local err="${TESTOUT_DIR}/$filename.err"
 
@@ -74,6 +74,37 @@ run_case() {
       fail "${name}: empty response"
     fi
   fi
+}
+
+run_parallel_case() {
+  local name="$1"
+  local path="$2"
+  local expected_file="${3:-}"
+  local expected_status="${4:-0}"
+  local n="${5:-8}"
+
+  local filename=$(safe_name "$path")
+  local out="${TESTOUT_DIR}/$filename.out"
+  local err="${TESTOUT_DIR}/$filename.err"
+  pids=()
+
+  log "Testing ${name} with ${n} concurrent clients..."
+
+  for ((i=1; i<=n; i++)); do
+    (
+    set +e
+    "$CLIENT_BIN" localhost "$PORT" "$path" \
+      >"${out}.${i}" \
+      2>"${err}.${i}"
+    echo $? >"${TESTOUT_DIR}/status.${i}"
+    set -e
+    ) &
+    pids+=($!)
+  done
+
+  for pid in "${pids[@]}"; do
+    wait "$pid"
+  done
 }
 
 test_static() {
