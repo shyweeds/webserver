@@ -45,6 +45,7 @@ bool request_parse(task_queue_t* q, task_t* local_task) {
 
   is_static = request_parse_uri(uri, filename, cgiargs);
   if (stat(filename, &sbuf) < 0) {
+    request_read_headers(local_task->conn_fd);
     request_error(local_task->conn_fd, filename, "404", "Not found",
                   "server could not find this file");
     return false;
@@ -257,7 +258,7 @@ int main(int argc, char* argv[]) {
     int                client_len = sizeof(client_addr);
     int conn_fd = accept_or_die(listen_fd, (sockaddr_t*)&client_addr, (socklen_t*)&client_len);
     /******test*****/
-    LOG("main():conn_fd = %d\n", conn_fd);
+    LOG("main():conn_fd = %d", conn_fd);
 
     local_task.conn_fd          = conn_fd;
     local_task.error_occur_flag = false;
