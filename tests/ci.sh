@@ -7,8 +7,8 @@ CLIENT_BIN=./bin/wclient
 BASE_DIR=./bin/basedir
 TESTOUT_DIR=./tests/test-out
 EXPECTED_DIR=./tests/expected
-THREADS=4
-BUFFERS=4
+THREADS=10
+BUFFERS=10
 SCHEDALG=FIFO
 
 # Utils
