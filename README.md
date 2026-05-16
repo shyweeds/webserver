@@ -34,12 +34,15 @@ This [project](./Project.md) is mainly for learning and practice.
 
 ```text
 .
-├── src/            # Core source code
-├── include/        # Header files
-├── static/         # Static assets directory
-├── tests/          # Test scripts
-├── build/          # Build output
+├── .github/
+├── bin/            #.gdbinit here & files for server
+├── include/         
+├── src/         
+├── tests/          # Test scripts and examples
+├── .clang-format
+├── .gitignore
 ├── Makefile
+├── Project.md
 └── README.md
 ```
 
