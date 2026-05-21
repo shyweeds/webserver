@@ -1,5 +1,3 @@
-![stars](https://img.shields.io/github/stars/shyweeds/webserver?style=social)
-![CI](https://github.com/shyweeds/webserver/actions/workflows/ci.yml/badge.svg)
 # Overview
 
 In this assignment, you will be developing a concurrent web server. To
